@@ -14,37 +14,27 @@ IMAGE_DIR = os.path.join(ROOT_DIR, "shapes_train2018")
 ANNOTATION_DIR = os.path.join(ROOT_DIR, "annotations")
 
 INFO = {
-    "description": "Example Dataset",
-    "url": "https://github.com/waspinator/pycococreator",
-    "version": "0.1.0",
-    "year": 2018,
-    "contributor": "waspinator",
+    "description": "ROCO Footprints Dataset",
+    # "url": "https://github.com/waspinator/pycococreator",
+    "version": "0.0.1",
+    "year": 2019,
+    "contributor": "Calvin Echols",
     "date_created": datetime.datetime.utcnow().isoformat(' ')
 }
 
 LICENSES = [
-    {
-        "id": 1,
-        "name": "Attribution-NonCommercial-ShareAlike License",
-        "url": "http://creativecommons.org/licenses/by-nc-sa/2.0/"
-    }
+    # {
+    #     "id": 1,
+    #     "name": "Attribution-NonCommercial-ShareAlike License",
+    #     "url": "http://creativecommons.org/licenses/by-nc-sa/2.0/"
+    # }
 ]
 
 CATEGORIES = [
     {
         'id': 1,
-        'name': 'square',
-        'supercategory': 'shape',
-    },
-    {
-        'id': 2,
-        'name': 'circle',
-        'supercategory': 'shape',
-    },
-    {
-        'id': 3,
-        'name': 'triangle',
-        'supercategory': 'shape',
+        'name': 'footprint',
+        'supercategory': 'building',
     },
 ]
 
@@ -57,7 +47,7 @@ def filter_for_jpeg(root, files):
     return files
 
 def filter_for_annotations(root, files, image_filename):
-    file_types = ['*.png']
+    file_types = ['*.tif']
     file_types = r'|'.join([fnmatch.translate(x) for x in file_types])
     basename_no_extension = os.path.splitext(os.path.basename(image_filename))[0]
     file_name_prefix = basename_no_extension + '.*'
@@ -102,8 +92,7 @@ def main():
                     class_id = [x['id'] for x in CATEGORIES if x['name'] in annotation_filename][0]
 
                     category_info = {'id': class_id, 'is_crowd': 'crowd' in image_filename}
-                    binary_mask = np.asarray(Image.open(annotation_filename)
-                        .convert('1')).astype(np.uint8)
+                    binary_mask = np.asarray(Image.open(annotation_filename)).astype(np.uint8)
                     
                     annotation_info = pycococreatortools.create_annotation_info(
                         segmentation_id, image_id, category_info, binary_mask,
