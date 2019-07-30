@@ -21,9 +21,8 @@ SOURCE_DIR = "D:\\temp\\ROCO_1_Training_Data_JPG_22\\"
 SOURCE_IMAGE_DIR = os.path.join(SOURCE_DIR, "images")
 SOURCE_LABEL_DIR = os.path.join(SOURCE_DIR, "labels")
 
-DATASET_NAME = "ROCOFootprints"
+DATASET_NAME = "ROCOFootprints_128"
 
-ROOT_DIR = "ROCO_Dataset"
 # IMAGE_DIR = os.path.join(ROOT_DIR, "images")
 # ANNOTATION_DIR = os.path.join(ROOT_DIR, "annotations")
 
@@ -45,6 +44,8 @@ INFO = {
     "contributor": "Calvin Echols",
     "date_created": datetime.datetime.utcnow().isoformat(' ')
 }
+
+ROOT_DIR = "{}_{}".format(DATASET_NAME, INFO["year"])
 
 LICENSES = [
     # {
@@ -151,7 +152,7 @@ def split_data_for_training():
         loop_index = 0
         training_set_number += 1
         training_set_dir_name = os.path.join(ROOT_DIR, "train_stage{}".format(training_set_number))
-        validation_set_dir_name = os.path.join(ROOT_DIR, "val_stage{}".format(training_set_number))    
+        validation_set_dir_name = os.path.join(ROOT_DIR, "minival_stage{}".format(training_set_number))    
         make_dirs(training_set_number, training_set_dir_name, validation_set_dir_name)
         while loop_index < (TRAIN_SET_SIZE + VALIDATION_SET_SIZE - 1):
             random_target = random.choice(filtered_image_files)
@@ -184,9 +185,10 @@ def copy_image_and_annotation_files_to_directory(image_file, filtered_annotation
         name = category["name"]
         target_annotation_file = next((x for x in category["files"] if file_name_without_extension in x), False)
         if target_annotation_file != False:
-            target_annotation_file_name = os.path.split(target_annotation_file)[1]        
+            target_annotation_file_name = os.path.split(target_annotation_file)[1]
+            (target_annotation_file_name_without_extension, target_annotation_file_name_extension) =  os.path.splitext(file_name)
             # target_annotation_file_name_without_extension = os.path.splitext(target_annotation_file_name)[0]
-            copyfile(target_annotation_file, os.path.join(target_directory, ANNOTATION_DIR_NAME, "{}_{}".format(target_annotation_file_name, name)))
+            copyfile(target_annotation_file, os.path.join(target_directory, ANNOTATION_DIR_NAME, "{}_{}{}".format(target_annotation_file_name_without_extension, name, target_annotation_file_name_extension)))
             print ("Found a file that matches the target image chip. {}".format(target_annotation_file))
         else:
             print("No annotation found for {} where category id = {}".format(image_file, id))
@@ -277,7 +279,7 @@ def main():
 
                 image_id = image_id + 1
 
-        with open('{}/instances_{}_{}_{}.json'.format(ROOT_DIR, DATASET_NAME, dir, INFO["year"]), 'w') as output_json_file:
+        with open('{}/instances_{}.json'.format(ROOT_DIR, DATASET_NAME, dir), 'w') as output_json_file:
             json.dump(coco_output, output_json_file)
 
 
