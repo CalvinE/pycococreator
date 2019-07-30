@@ -186,7 +186,7 @@ def copy_image_and_annotation_files_to_directory(image_file, filtered_annotation
         target_annotation_file = next((x for x in category["files"] if file_name_without_extension in x), False)
         if target_annotation_file != False:
             target_annotation_file_name = os.path.split(target_annotation_file)[1]
-            (target_annotation_file_name_without_extension, target_annotation_file_name_extension) =  os.path.splitext(file_name)
+            (target_annotation_file_name_without_extension, target_annotation_file_name_extension) =  os.path.splitext(target_annotation_file_name)
             # target_annotation_file_name_without_extension = os.path.splitext(target_annotation_file_name)[0]
             copyfile(target_annotation_file, os.path.join(target_directory, ANNOTATION_DIR_NAME, "{}_{}{}".format(target_annotation_file_name_without_extension, name, target_annotation_file_name_extension)))
             print ("Found a file that matches the target image chip. {}".format(target_annotation_file))
