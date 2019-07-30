@@ -14,13 +14,18 @@ import random
 
 SHOULD_COPY = True
 
+IMAGE_DIR_NAME = "images"
+ANNOTATION_DIR_NAME = "annotations"
+
 SOURCE_DIR = "D:\\temp\\ROCO_1_Training_Data_JPG_22\\"
 SOURCE_IMAGE_DIR = os.path.join(SOURCE_DIR, "images")
 SOURCE_LABEL_DIR = os.path.join(SOURCE_DIR, "labels")
 
+DATASET_NAME = "ROCOFootprints"
+
 ROOT_DIR = "ROCO_Dataset"
-IMAGE_DIR = os.path.join(ROOT_DIR, "images")
-ANNOTATION_DIR = os.path.join(ROOT_DIR, "annotations")
+# IMAGE_DIR = os.path.join(ROOT_DIR, "images")
+# ANNOTATION_DIR = os.path.join(ROOT_DIR, "annotations")
 
 IMAGE_FILE_EXTENSIONS = ['*.jpg']
 ANNOTATION_FILE_EXTENSIONS = ['*.tif']
@@ -65,8 +70,8 @@ def filter_for_jpeg(root, files, extensions):
     
     return files
 
-def filter_for_annotations(root, files, image_filename):
-    file_types = ANNOTATION_FILE_EXTENSIONS
+def filter_for_annotations(root, files, image_filename, extensions):
+    file_types = extensions#ANNOTATION_FILE_EXTENSIONS
     file_types = '|'.join([fnmatch.translate(x) for x in file_types])
     basename_no_extension = os.path.splitext(os.path.basename(image_filename))[0]
     file_name_prefix = basename_no_extension + '.*'
@@ -145,8 +150,8 @@ def split_data_for_training():
     for i in range(number_of_train_val_sets):
         loop_index = 0
         training_set_number += 1
-        training_set_dir_name = os.path.join(ROOT_DIR, "train{}".format(training_set_number))
-        validation_set_dir_name = os.path.join(ROOT_DIR, "val{}".format(training_set_number))    
+        training_set_dir_name = os.path.join(ROOT_DIR, "train_stage{}".format(training_set_number))
+        validation_set_dir_name = os.path.join(ROOT_DIR, "val_stage{}".format(training_set_number))    
         make_dirs(training_set_number, training_set_dir_name, validation_set_dir_name)
         while loop_index < (TRAIN_SET_SIZE + VALIDATION_SET_SIZE - 1):
             random_target = random.choice(filtered_image_files)
@@ -162,18 +167,18 @@ def split_data_for_training():
 def make_dirs(training_set_number, training_set_dir_name, validation_set_dir_name):
     if not os.path.exists(training_set_dir_name):
         os.mkdir(training_set_dir_name)        
-        os.mkdir(os.path.join(training_set_dir_name, "images"))
-        os.mkdir(os.path.join(training_set_dir_name, "annotations"))    
+        os.mkdir(os.path.join(training_set_dir_name, IMAGE_DIR_NAME))
+        os.mkdir(os.path.join(training_set_dir_name, ANNOTATION_DIR_NAME))    
     if not os.path.exists(validation_set_dir_name):
         os.mkdir(validation_set_dir_name)
-        os.mkdir(os.path.join(validation_set_dir_name, "images"))
-        os.mkdir(os.path.join(validation_set_dir_name, "annotations"))
+        os.mkdir(os.path.join(validation_set_dir_name, IMAGE_DIR_NAME))
+        os.mkdir(os.path.join(validation_set_dir_name, ANNOTATION_DIR_NAME))
 
 def copy_image_and_annotation_files_to_directory(image_file, filtered_annotation_image_files_per_category, target_directory):
     file_name = os.path.split(image_file)[1]
     print("Finding annotations for {}".format(file_name))
     file_name_without_extension = os.path.splitext(file_name)[0]
-    copyfile(image_file, os.path.join(target_directory, "images", file_name))
+    copyfile(image_file, os.path.join(target_directory, IMAGE_DIR_NAME, file_name))
     for category in filtered_annotation_image_files_per_category:
         id = category["id"]
         name = category["name"]
@@ -181,7 +186,7 @@ def copy_image_and_annotation_files_to_directory(image_file, filtered_annotation
         if target_annotation_file != False:
             target_annotation_file_name = os.path.split(target_annotation_file)[1]        
             # target_annotation_file_name_without_extension = os.path.splitext(target_annotation_file_name)[0]
-            copyfile(target_annotation_file, os.path.join(target_directory, "annotations", "{}_{}".format(name, target_annotation_file_name)))
+            copyfile(target_annotation_file, os.path.join(target_directory, ANNOTATION_DIR_NAME, "{}_{}".format(target_annotation_file_name, name)))
             print ("Found a file that matches the target image chip. {}".format(target_annotation_file))
         else:
             print("No annotation found for {} where category id = {}".format(image_file, id))
@@ -231,47 +236,52 @@ def main():
 
     image_id = 1
     segmentation_id = 1
-    print('Starting annotation generation, looking for images in {} and annotations in {}'.format(IMAGE_DIR, ANNOTATION_DIR))
+    print('Starting annotation generation')
     # filter for jpeg images
-    for root, _, files in os.walk(IMAGE_DIR):
-        image_files = filter_for_jpeg(root, files)
+    for dir in os.listdir(ROOT_DIR):
+        print(dir)
+        image_dir = os.path.join(ROOT_DIR, dir, "images")
+        annotation_dir = os.path.join(ROOT_DIR, dir, "annotations")
+        print("Annotating data in {} and {}".format(image_dir, annotation_dir))
+        for root, _, files in os.walk(image_dir):
+            image_files = filter_for_jpeg(root, files, IMAGE_FILE_EXTENSIONS)
 
-        # go through each image
-        for image_filename in image_files:
-            image = Image.open(image_filename)
-            image_info = pycococreatortools.create_image_info(
-                image_id, os.path.basename(image_filename), image.size)
-            coco_output["images"].append(image_info)
+            # go through each image
+            for image_filename in image_files:
+                image = Image.open(image_filename)
+                image_info = pycococreatortools.create_image_info(
+                    image_id, os.path.basename(image_filename), image.size)
+                coco_output["images"].append(image_info)
 
-            # filter for associated png annotations
-            for root, _, files in os.walk(ANNOTATION_DIR):
-                annotation_files = filter_for_annotations(root, files, image_filename)
+                # filter for associated png annotations
+                for root, _, files in os.walk(annotation_dir):
+                    annotation_files = filter_for_annotations(root, files, image_filename, ANNOTATION_FILE_EXTENSIONS)
 
-                # go through each associated annotation
-                for annotation_filename in annotation_files:
-                    
-                    print(annotation_filename)
-                    class_id = [x['id'] for x in CATEGORIES if x['name'] in annotation_filename][0]
+                    # go through each associated annotation
+                    for annotation_filename in annotation_files:
+                        
+                        print(annotation_filename)
+                        class_id = [x['id'] for x in CATEGORIES if x['name'] in annotation_filename][0]
 
-                    category_info = {'id': class_id, 'is_crowd': 'crowd' in image_filename}
-                    binary_mask = np.asarray(Image.open(annotation_filename)).astype(np.uint8)
-                    
-                    annotation_info = pycococreatortools.create_annotation_info(
-                        segmentation_id, image_id, category_info, binary_mask,
-                        image.size, tolerance=2)
+                        category_info = {'id': class_id, 'is_crowd': 'crowd' in image_filename}
+                        binary_mask = np.asarray(Image.open(annotation_filename)).astype(np.uint8)
+                        
+                        annotation_info = pycococreatortools.create_annotation_info(
+                            segmentation_id, image_id, category_info, binary_mask,
+                            image.size, tolerance=2)
 
-                    if annotation_info is not None:
-                        coco_output["annotations"].append(annotation_info)
+                        if annotation_info is not None:
+                            coco_output["annotations"].append(annotation_info)
 
-                    segmentation_id = segmentation_id + 1
+                        segmentation_id = segmentation_id + 1
 
-            image_id = image_id + 1
+                image_id = image_id + 1
 
-    with open('{}/instances_shape_train2018.json'.format(ROOT_DIR), 'w') as output_json_file:
-        json.dump(coco_output, output_json_file)
+        with open('{}/instances_{}_{}_{}.json'.format(ROOT_DIR, DATASET_NAME, dir, INFO["year"]), 'w') as output_json_file:
+            json.dump(coco_output, output_json_file)
 
 
 if __name__ == "__main__":
     if SHOULD_COPY:
         split_data_for_training()
-    # main()
+    main()
