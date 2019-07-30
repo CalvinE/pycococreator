@@ -146,11 +146,8 @@ def split_data_for_training():
         loop_index = 0
         training_set_number += 1
         training_set_dir_name = os.path.join(ROOT_DIR, "train{}".format(training_set_number))
-        if not os.path.exists(training_set_dir_name):
-            os.mkdir(training_set_dir_name)
-        validation_set_dir_name = os.path.join(ROOT_DIR, "val{}".format(training_set_number))        
-        if not os.path.exists(validation_set_dir_name):
-            os.mkdir(validation_set_dir_name)
+        validation_set_dir_name = os.path.join(ROOT_DIR, "val{}".format(training_set_number))    
+        make_dirs(training_set_number, training_set_dir_name, validation_set_dir_name)
         while loop_index < (TRAIN_SET_SIZE + VALIDATION_SET_SIZE - 1):
             random_target = random.choice(filtered_image_files)
             filtered_image_files.remove(random_target)
@@ -162,19 +159,32 @@ def split_data_for_training():
                 copy_image_and_annotation_files_to_directory(random_target, filtered_annotation_image_files_per_category, validation_set_dir_name)
             loop_index += 1
 
+def make_dirs(training_set_number, training_set_dir_name, validation_set_dir_name):
+    if not os.path.exists(training_set_dir_name):
+        os.mkdir(training_set_dir_name)        
+        os.mkdir(os.path.join(training_set_dir_name, "images"))
+        os.mkdir(os.path.join(training_set_dir_name, "annotations"))    
+    if not os.path.exists(validation_set_dir_name):
+        os.mkdir(validation_set_dir_name)
+        os.mkdir(os.path.join(validation_set_dir_name, "images"))
+        os.mkdir(os.path.join(validation_set_dir_name, "annotations"))
+
 def copy_image_and_annotation_files_to_directory(image_file, filtered_annotation_image_files_per_category, target_directory):
     file_name = os.path.split(image_file)[1]
     print("Finding annotations for {}".format(file_name))
     file_name_without_extension = os.path.splitext(file_name)[0]
-    copyfile(image_file, os.path.join(target_directory, file_name))
+    copyfile(image_file, os.path.join(target_directory, "images", file_name))
     for category in filtered_annotation_image_files_per_category:
         id = category["id"]
         name = category["name"]
-        target_annotation_file = next(x for x in category["files"] if file_name_without_extension in x)
-        target_annotation_file_name = os.path.split(target_annotation_file)[1]        
-        # target_annotation_file_name_without_extension = os.path.splitext(target_annotation_file_name)[0]
-        copyfile(target_annotation_file, os.path.join(target_directory, "{}_{}".format(name, target_annotation_file_name)))
-        print ("Found a file that matches the target image chip. {}".format(target_annotation_file))
+        target_annotation_file = next((x for x in category["files"] if file_name_without_extension in x), False)
+        if target_annotation_file != False:
+            target_annotation_file_name = os.path.split(target_annotation_file)[1]        
+            # target_annotation_file_name_without_extension = os.path.splitext(target_annotation_file_name)[0]
+            copyfile(target_annotation_file, os.path.join(target_directory, "annotations", "{}_{}".format(name, target_annotation_file_name)))
+            print ("Found a file that matches the target image chip. {}".format(target_annotation_file))
+        else:
+            print("No annotation found for {} where category id = {}".format(image_file, id))
 
 
 def get_category_data():
