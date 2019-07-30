@@ -12,7 +12,7 @@ from pycococreatortools import pycococreatortools
 import multiprocessing as mp
 import random
 
-SHOULD_COPY = True
+SHOULD_COPY = False
 
 IMAGE_DIR_NAME = "images"
 ANNOTATION_DIR_NAME = "annotations"
@@ -236,12 +236,11 @@ def main():
         "annotations": []
     }
 
-    image_id = 1
-    segmentation_id = 1
     print('Starting annotation generation')
     # filter for jpeg images
     for dir in os.listdir(ROOT_DIR):
-        print(dir)
+        image_id = 1
+        segmentation_id = 1
         image_dir = os.path.join(ROOT_DIR, dir, "images")
         annotation_dir = os.path.join(ROOT_DIR, dir, "annotations")
         print("Annotating data in {} and {}".format(image_dir, annotation_dir))
@@ -279,7 +278,7 @@ def main():
 
                 image_id = image_id + 1
 
-        with open('{}/instances_{}.json'.format(ROOT_DIR, DATASET_NAME, dir), 'w') as output_json_file:
+        with open('{}/instances_{}_{}.json'.format(ROOT_DIR, DATASET_NAME, dir), 'w') as output_json_file:
             json.dump(coco_output, output_json_file)
 
 
