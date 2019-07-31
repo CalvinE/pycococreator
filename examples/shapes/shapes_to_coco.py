@@ -260,23 +260,26 @@ def main():
 
                     # go through each associated annotation
                     for annotation_filename in annotation_files:
-                        
                         print(annotation_filename)
                         class_id = [x['id'] for x in CATEGORIES if x['name'] in annotation_filename][0]
 
-                        category_info = {'id': class_id, 'is_crowd': 'crowd' in image_filename}
-                        binary_mask = np.asarray(Image.open(annotation_filename)).astype(np.uint8)
-                        
-                        annotation_info = pycococreatortools.create_annotation_info(
-                            segmentation_id, image_id, category_info, binary_mask,
-                            image.size, tolerance=2)
+                        category_info = {'id': class_id, 'is_crowd': 'crowd' in image_filename}                        
+                        try:
+                            binary_mask = np.asarray(Image.open(annotation_filename)).astype(np.uint8)
+                            
+                            annotation_info = pycococreatortools.create_annotation_info(
+                                segmentation_id, image_id, category_info, binary_mask,
+                                image.size, tolerance=2)
 
-                        if annotation_info is not None:
-                            coco_output["annotations"].append(annotation_info)
+                            if annotation_info is not None:
+                                coco_output["annotations"].append(annotation_info)
+                        except:
+                            print("Failed to open: {}".format(annotation_filename))                             
+                            coco_output["images"].remove(image_info)
+                        else: #If no errors occurred                        
+                            segmentation_id = segmentation_id + 1
+                            image_id = image_id + 1
 
-                        segmentation_id = segmentation_id + 1
-
-                image_id = image_id + 1
 
         with open('{}/instances_{}_{}.json'.format(ROOT_DIR, DATASET_NAME, dir), 'w') as output_json_file:
             json.dump(coco_output, output_json_file)
