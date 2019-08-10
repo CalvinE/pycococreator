@@ -11,28 +11,26 @@ import numpy as np
 from pycococreatortools import pycococreatortools
 import multiprocessing as mp
 import random
+import math
 
-SHOULD_COPY = False
+SHOULD_COPY = True
 
 IMAGE_DIR_NAME = "images"
 ANNOTATION_DIR_NAME = "annotations"
 
-SOURCE_DIR = "D:\\temp\\ROCO_1_Training_Data_JPG_22\\"
+SOURCE_DIR = "E:\\Data\\ROCO_1_Training_Data_JPG_20\\"
 SOURCE_IMAGE_DIR = os.path.join(SOURCE_DIR, "images")
 SOURCE_LABEL_DIR = os.path.join(SOURCE_DIR, "labels")
 
-DATASET_NAME = "ROCOFootprints_128"
-
-# IMAGE_DIR = os.path.join(ROOT_DIR, "images")
-# ANNOTATION_DIR = os.path.join(ROOT_DIR, "annotations")
+DATASET_NAME = "ROCOFootprints_256"
 
 IMAGE_FILE_EXTENSIONS = ['*.jpg']
 ANNOTATION_FILE_EXTENSIONS = ['*.tif']
 
-TRAIN_SET_SIZE = 15000
-VALIDATION_SET_SIZE = 150
+TRAIN_SET_SIZE = 25000
+VALIDATION_SET_SIZE = 250
 
-MAX_TRAIN_VALIDATION_SETS = 5
+MAX_TRAIN_VALIDATION_SETS = 10
 
 STARTING_TRAINING_SET_NUMBER = 1
 
@@ -82,44 +80,6 @@ def filter_for_annotations(root, files, image_filename, extensions):
 
     return files
 
-# def copy_files_and_add_prefixes():
-#     training_set_number = 1
-#     validation_set_number = 1
-#     image_file_walk = os.walk(SOURCE_IMAGE_DIR)
-#     filtered_image_files = []
-#     print("loading target image files")
-#     for image_root, _, image_files in image_file_walk:
-#         print("filtering files from {} to find relevant files.".format(SOURCE_IMAGE_DIR))
-#         filtered_filenames = filter_for_jpeg(image_root, image_files)        
-#         filtered_image_files.extend(filtered_filenames)
-#     for image_file in filtered_image_files:
-#         destination_file_name = os.path.split(image_file)[1]
-#         destination_file_with_path = os.path.join(IMAGE_DIR, destination_file_name)
-#         print('copying {} to {}'.format(image_file, destination_file_with_path))
-#         copyfile(image_file, "{}".format(str(training_set_number)), destination_file_with_path)
-#     image
-#     print("iterating over categories")
-#     for x in CATEGORIES:
-#         id = x['id']
-#         name = x['name']
-#         supercategory = x['supercategory']
-#         print("Found category id = {}, name = {}, supercategory = {}".format(str(id), name, supercategory))
-#         category_path = os.path.join(SOURCE_LABEL_DIR, str(id))
-#         file_types = ANNOTATION_FILE_EXTENSIONS
-#         regex =  re.compile(r'|'.join([fnmatch.translate(x) for x in file_types]))
-#         for label_root, _, label_files in os.walk(category_path):
-#             target_label_files = list(filter(regex.search, label_files))           
-#             for image_filename in filtered_image_files:
-#                 # print(image_filename)
-#                 filtered_label_files = filter_for_annotations(label_root, target_label_files, image_filename)
-#                 for label_filename in filtered_label_files:
-#                     original_label_file_name = os.path.split(label_filename)[1]
-#                     destination_file_name = "{}_{}".format(name, original_label_file_name)
-#                     destination_file_with_path = os.path.join(ANNOTATION_DIR, destination_file_name)
-#                     print('copying {} to {}'.format(label_filename, destination_file_with_path))                    
-#                     target_label_files.remove(original_label_file_name)
-#                     copyfile(label_filename, destination_file_with_path)
-
 #copy to new locations with split training and validation sets.
 def split_data_for_training():
     training_set_number = STARTING_TRAINING_SET_NUMBER - 1
@@ -145,25 +105,46 @@ def split_data_for_training():
             "name": category["name"],
             "files": get_annotation_files_by_categories(category)
         })
-
-    data_buckets = []
+    number_of_samples = len(filtered_image_files)
+    random.shuffle(filtered_image_files)
+    per_subset_images = np.array_split(filtered_image_files, MAX_TRAIN_VALIDATION_SETS)
     print("Found {} number of images. Will split into {} number of training and validation sets.".format(number_of_images, number_of_train_val_sets))
-    for i in range(number_of_train_val_sets):
-        loop_index = 0
-        training_set_number += 1
-        training_set_dir_name = os.path.join(ROOT_DIR, "train_stage{}".format(training_set_number))
-        validation_set_dir_name = os.path.join(ROOT_DIR, "minival_stage{}".format(training_set_number))    
-        make_dirs(training_set_number, training_set_dir_name, validation_set_dir_name)
-        while loop_index < (TRAIN_SET_SIZE + VALIDATION_SET_SIZE - 1):
-            random_target = random.choice(filtered_image_files)
-            filtered_image_files.remove(random_target)
-            if loop_index < TRAIN_SET_SIZE:
-                print("{} - Put the data in the current train set # {}.".format(loop_index, training_set_number))
-                copy_image_and_annotation_files_to_directory(random_target, filtered_annotation_image_files_per_category, training_set_dir_name)
-            elif loop_index < TRAIN_SET_SIZE + VALIDATION_SET_SIZE:
-                print("{} - Put the data in the current validation set # {}.".format(loop_index, training_set_number))
-                copy_image_and_annotation_files_to_directory(random_target, filtered_annotation_image_files_per_category, validation_set_dir_name)
-            loop_index += 1
+    subsets = []
+    subset_number = 1
+    for subset in per_subset_images:
+        subsets.append( {
+            "annotations": filtered_annotation_image_files_per_category,
+            "images": subset,
+            "subset_number": subset_number
+        })
+        subset_number += 1
+    num_threads = mp.cpu_count()
+    # process_files(subsets[0])
+    with mp.Pool(processes = num_threads) as p:
+        p.map(process_files, subsets)
+    
+
+def process_files(subset):
+    images = subset["images"]
+    filtered_annotation_image_files_per_category = subset["annotations"]
+    subset_number = subset["subset_number"]
+    num_images = len(images)
+    train_set_size = math.floor(num_images * 0.95)
+    loop_index = 0
+    training_set_number = subset_number
+    training_set_dir_name = os.path.join(ROOT_DIR, "train_stage{}".format(training_set_number))
+    validation_set_dir_name = os.path.join(ROOT_DIR, "val_stage{}".format(training_set_number))    
+    make_dirs(training_set_number, training_set_dir_name, validation_set_dir_name)
+    while loop_index < num_images:
+        random_target = images[loop_index]
+        # filtered_image_files.remove(random_target)
+        if loop_index < train_set_size:
+            print("{} - Put the data in the current train set # {}.".format(loop_index, training_set_number))
+            copy_image_and_annotation_files_to_directory(random_target, filtered_annotation_image_files_per_category, training_set_dir_name)
+        else:
+            print("{} - Put the data in the current validation set # {}.".format(loop_index, training_set_number))
+            copy_image_and_annotation_files_to_directory(random_target, filtered_annotation_image_files_per_category, validation_set_dir_name)
+        loop_index += 1
 
 def make_dirs(training_set_number, training_set_dir_name, validation_set_dir_name):
     if not os.path.exists(training_set_dir_name):
@@ -221,10 +202,6 @@ def get_annotation_files_by_categories(category):
         filtered_annoatation_image_files.extend(filtered_filenames)
     print("Found {} annotation image files for category id = {}".format(len(filtered_annoatation_image_files), category["id"]))
     return filtered_annoatation_image_files
-        
-            
-        
-
 
 def main():        
 
@@ -281,7 +258,7 @@ def main():
                             image_id = image_id + 1
 
 
-        with open('{}/instances_{}_{}.json'.format(ROOT_DIR, DATASET_NAME, dir), 'w') as output_json_file:
+        with open('{}/instances_{}.json'.format(ROOT_DIR, dir), 'w') as output_json_file:
             json.dump(coco_output, output_json_file)
 
 
