@@ -13,7 +13,7 @@ import multiprocessing as mp
 import random
 import math
 
-SHOULD_COPY = True
+SHOULD_COPY = False
 
 IMAGE_DIR_NAME = "images"
 ANNOTATION_DIR_NAME = "annotations"
@@ -24,6 +24,9 @@ SOURCE_LABEL_DIR = os.path.join(SOURCE_DIR, "labels")
 
 DATASET_NAME = "ROCOFootprints_256"
 
+TRAIN_FOLDER_NAME = "train_stage"
+VALIDATION_FOLDER_NAME = "val_stage"
+
 IMAGE_FILE_EXTENSIONS = ['*.jpg']
 ANNOTATION_FILE_EXTENSIONS = ['*.tif']
 
@@ -33,6 +36,10 @@ VALIDATION_SET_SIZE = 250
 MAX_TRAIN_VALIDATION_SETS = 10
 
 STARTING_TRAINING_SET_NUMBER = 1
+
+NUM_THREADS = mp.cpu_count()
+
+STATS = []
 
 INFO = {
     "description": "ROCO Footprints Dataset",
@@ -95,8 +102,8 @@ def split_data_for_training():
         filtered_filenames = filter_for_jpeg(image_root, image_files, IMAGE_FILE_EXTENSIONS)        
         filtered_image_files.extend(filtered_filenames)
     number_of_images = len(filtered_image_files)
-    possible_number_of_train_val_sets = number_of_images % (TRAIN_SET_SIZE + VALIDATION_SET_SIZE)
-    number_of_train_val_sets = MAX_TRAIN_VALIDATION_SETS if MAX_TRAIN_VALIDATION_SETS <= possible_number_of_train_val_sets else possible_number_of_train_val_sets
+    # possible_number_of_train_val_sets = number_of_images % (TRAIN_SET_SIZE + VALIDATION_SET_SIZE)
+    # number_of_train_val_sets = MAX_TRAIN_VALIDATION_SETS # if MAX_TRAIN_VALIDATION_SETS <= possible_number_of_train_val_sets else possible_number_of_train_val_sets
     categories = get_category_data()
     for category in categories:
         print("populating file data for annotations of category where id = {}".format(category["id"]))
@@ -108,7 +115,7 @@ def split_data_for_training():
     number_of_samples = len(filtered_image_files)
     random.shuffle(filtered_image_files)
     per_subset_images = np.array_split(filtered_image_files, MAX_TRAIN_VALIDATION_SETS)
-    print("Found {} number of images. Will split into {} number of training and validation sets.".format(number_of_images, number_of_train_val_sets))
+    print("Found {} number of images. Will split into {} number of training and validation sets.".format(number_of_images, MAX_TRAIN_VALIDATION_SETS))
     subsets = []
     subset_number = 1
     for subset in per_subset_images:
@@ -118,9 +125,8 @@ def split_data_for_training():
             "subset_number": subset_number
         })
         subset_number += 1
-    num_threads = mp.cpu_count()
     # process_files(subsets[0])
-    with mp.Pool(processes = num_threads) as p:
+    with mp.Pool(processes = NUM_THREADS) as p:
         p.map(process_files, subsets)
     
 
@@ -132,8 +138,8 @@ def process_files(subset):
     train_set_size = math.floor(num_images * 0.95)
     loop_index = 0
     training_set_number = subset_number
-    training_set_dir_name = os.path.join(ROOT_DIR, "train_stage{}".format(training_set_number))
-    validation_set_dir_name = os.path.join(ROOT_DIR, "val_stage{}".format(training_set_number))    
+    training_set_dir_name = os.path.join(ROOT_DIR, "{}{}".format(TRAIN_FOLDER_NAME, training_set_number))
+    validation_set_dir_name = os.path.join(ROOT_DIR, "{}{}".format(VALIDATION_FOLDER_NAME, training_set_number))    
     make_dirs(training_set_number, training_set_dir_name, validation_set_dir_name)
     while loop_index < num_images:
         random_target = images[loop_index]
@@ -203,7 +209,13 @@ def get_annotation_files_by_categories(category):
     print("Found {} annotation image files for category id = {}".format(len(filtered_annoatation_image_files), category["id"]))
     return filtered_annoatation_image_files
 
-def main():        
+def shapes_to_coco_processing(directory):
+    images_added = 0
+    annotations_added = 0
+    images_failed = 0
+    annoations_failed = 0
+    images_with_no_annotations = 0
+    images_with_annotations = 0
 
     coco_output = {
         "info": INFO,
@@ -212,25 +224,34 @@ def main():
         "images": [],
         "annotations": []
     }
+    image_id = 1
+    segmentation_id = 1
+    image_dir = os.path.join(ROOT_DIR, directory, "images")
+    annotation_dir = os.path.join(ROOT_DIR, directory, "annotations")
+    print("Annotating data in {} and {}".format(image_dir, annotation_dir))
+    for root, _, files in os.walk(image_dir):
+        image_files = filter_for_jpeg(root, files, IMAGE_FILE_EXTENSIONS)
 
-    print('Starting annotation generation')
-    # filter for jpeg images
-    for dir in os.listdir(ROOT_DIR):
-        image_id = 1
-        segmentation_id = 1
-        image_dir = os.path.join(ROOT_DIR, dir, "images")
-        annotation_dir = os.path.join(ROOT_DIR, dir, "annotations")
-        print("Annotating data in {} and {}".format(image_dir, annotation_dir))
-        for root, _, files in os.walk(image_dir):
-            image_files = filter_for_jpeg(root, files, IMAGE_FILE_EXTENSIONS)
-
-            # go through each image
-            for image_filename in image_files:
-                image = Image.open(image_filename)
-                image_info = pycococreatortools.create_image_info(
-                    image_id, os.path.basename(image_filename), image.size)
-                coco_output["images"].append(image_info)
-
+        # go through each image
+        for image_filename in image_files:
+            number_of_annotations = 0
+            image = Image.open(image_filename)
+            image_info = pycococreatortools.create_image_info(
+                image_id, os.path.basename(image_filename), image.size)
+            #Try to open the image, and if it does not work log it and do not add it to the output.
+            did_open = False
+            try:
+                test_open = Image.open(image_filename)
+                if test_open is not None:
+                    did_open = True
+                    coco_output["images"].append(image_info)
+                    images_added += 1
+                    print("Image tested and appears valid; {}".format(image_filename))
+            except:
+                print("Failed to open image: {} Therefore we are skipping it in the subset of data.".format(image_filename))
+                images_failed += 1
+            
+            if did_open:
                 # filter for associated png annotations
                 for root, _, files in os.walk(annotation_dir):
                     annotation_files = filter_for_annotations(root, files, image_filename, ANNOTATION_FILE_EXTENSIONS)
@@ -250,17 +271,38 @@ def main():
 
                             if annotation_info is not None:
                                 coco_output["annotations"].append(annotation_info)
+                                annotations_added += 1
+                                number_of_annotations += 1
+                                print("Annotations found and appears valid: class_id: {}, annotation_filename: {}".format(class_id, annotation_filename))
                         except:
                             print("Failed to open: {}".format(annotation_filename))                             
                             coco_output["images"].remove(image_info)
+                            images_added -= 1                                
                         else: #If no errors occurred                        
                             segmentation_id = segmentation_id + 1
                             image_id = image_id + 1
+            if number_of_annotations == 0:
+                images_with_no_annotations += 1
+            else:
+                images_with_annotations += 1
 
 
-        with open('{}/instances_{}.json'.format(ROOT_DIR, dir), 'w') as output_json_file:
-            json.dump(coco_output, output_json_file)
+    with open('{}/instances_{}.json'.format(ROOT_DIR, directory), 'w') as output_json_file:
+        json.dump(coco_output, output_json_file)
 
+    subset_stats = "Summary Statistics: Subset = directory was {}\nImages added = {}\nImages failed = {}\nannotations added = {}\nannotations failed = {}\nImages with annotations = {}\nImages with no annotations = {}\n\n\n".format(directory, images_added, images_failed, annotations_added, annoations_failed, images_with_annotations, images_with_no_annotations)
+    print(subset_stats)
+    STATS.append(subset_stats)
+
+def main():
+    print('Starting annotation generation')
+    # filter for jpeg images
+    dirs = os.listdir(ROOT_DIR)
+    with mp.Pool(processes = NUM_THREADS) as p:
+        p.map(shapes_to_coco_processing, dirs)
+    print("Finished annotating data.")
+    for stats in STATS:
+        print(stats)
 
 if __name__ == "__main__":
     if SHOULD_COPY:
