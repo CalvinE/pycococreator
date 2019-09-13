@@ -13,27 +13,27 @@ import multiprocessing as mp
 import random
 import math
 
-SHOULD_COPY = False
+SHOULD_COPY = True
 
 IMAGE_DIR_NAME = "images"
 ANNOTATION_DIR_NAME = "annotations"
 
-SOURCE_DIR = "E:\\Data\\ROCO_1_Training_Data_JPG_20\\"
+SOURCE_DIR = "E:\\Data\\ROCO_9_Inch_Only_Features_256_Whole\\"
 SOURCE_IMAGE_DIR = os.path.join(SOURCE_DIR, "images")
 SOURCE_LABEL_DIR = os.path.join(SOURCE_DIR, "labels")
 
-DATASET_NAME = "ROCOFootprints_256"
+DATASET_NAME = "ROCOFootprints_9_Inch_Incl_Only_Feature_256_Whole_Single"
 
 TRAIN_FOLDER_NAME = "train_stage"
 VALIDATION_FOLDER_NAME = "val_stage"
 
-IMAGE_FILE_EXTENSIONS = ['*.jpg']
+IMAGE_FILE_EXTENSIONS = ['*.png']
 ANNOTATION_FILE_EXTENSIONS = ['*.tif']
 
-TRAIN_SET_SIZE = 25000
-VALIDATION_SET_SIZE = 250
+# TRAIN_SET_SIZE = 25000
+# VALIDATION_SET_SIZE = 250
 
-MAX_TRAIN_VALIDATION_SETS = 10
+MAX_TRAIN_VALIDATION_SETS = 1
 
 STARTING_TRAINING_SET_NUMBER = 1
 
@@ -41,8 +41,10 @@ NUM_THREADS = mp.cpu_count()
 
 STATS = []
 
+THREAD_LOCK = mp.Lock()
+
 INFO = {
-    "description": "ROCO Footprints Dataset",
+    "description": "ROCO Footprints Dataset - 9 inch - only fetures - 256x256 - whole dataset",
     # "url": "https://github.com/waspinator/pycococreator",
     "version": "0.0.1",
     "year": 2019,
@@ -290,9 +292,11 @@ def shapes_to_coco_processing(directory):
     with open('{}/instances_{}.json'.format(ROOT_DIR, directory), 'w') as output_json_file:
         json.dump(coco_output, output_json_file)
 
+    THREAD_LOCK.acquire()
     subset_stats = "Summary Statistics: Subset = directory was {}\nImages added = {}\nImages failed = {}\nannotations added = {}\nannotations failed = {}\nImages with annotations = {}\nImages with no annotations = {}\n\n\n".format(directory, images_added, images_failed, annotations_added, annoations_failed, images_with_annotations, images_with_no_annotations)
     print(subset_stats)
     STATS.append(subset_stats)
+    THREAD_LOCK.release()
 
 def main():
     print('Starting annotation generation')
@@ -300,6 +304,7 @@ def main():
     dirs = os.listdir(ROOT_DIR)
     with mp.Pool(processes = NUM_THREADS) as p:
         p.map(shapes_to_coco_processing, dirs)
+    # shapes_to_coco_processing(dirs[0])
     print("Finished annotating data.")
     for stats in STATS:
         print(stats)

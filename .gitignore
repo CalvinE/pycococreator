@@ -105,3 +105,11 @@ ENV/
 MANIFEST
 
 \.vscode/
+
+examples/shapes/train/shapes_train2018/*
+examples/shapes/train/annotations/*
+examples/shapes/train/shapes_train2018_2/*
+examples/shapes/train/annotations_2/*
+examples/shapes/train/*.json
+
+examples
